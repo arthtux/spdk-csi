@@ -42,12 +42,12 @@ install_spdkcsi_helm_charts() {
 		NAMESPACE="default"
 	fi
 	# install spdk-csi-spdkfs and spdk-csi-rbd charts
-	"${HELM}" install --debug --namespace ${NAMESPACE} ${SPDKCSI_CHART_NAME} "${SCRIPT_DIR}"/../charts/spdk-csi
+	"${HELM}" install --debug --namespace "${NAMESPACE}" ${SPDKCSI_CHART_NAME} "${SCRIPT_DIR}"/../charts/spdk-csi
 
 	# Check SPDKDEV/SPDK storage deployment only when HELM_SKIP_SPDKDEV_CHECK not set
-	[ -z ${HELM_SKIP_SPDKDEV_CHECK+x} ] && check_deployment_status spdkdev ${NAMESPACE}
-	check_daemonset_status spdkcsi-node ${NAMESPACE}
-	check_statefulset_status spdkcsi-controller ${NAMESPACE}
+	[ -z ${HELM_SKIP_SPDKDEV_CHECK+x} ] && check_deployment_status spdkdev "${NAMESPACE}"
+	check_daemonset_status spdkcsi-node "${NAMESPACE}"
+	check_statefulset_status spdkcsi-controller "${NAMESPACE}"
 }
 
 function check_deployment_status() {
@@ -125,7 +125,7 @@ cleanup_spdkcsi_helm_charts() {
 	if [ -z "$NAMESPACE" ]; then
 		NAMESPACE="default"
 	fi
-	"${HELM}" uninstall --debug ${SPDKCSI_CHART_NAME} --namespace ${NAMESPACE}
+	"${HELM}" uninstall --debug ${SPDKCSI_CHART_NAME} --namespace "${NAMESPACE}"
 }
 
 helm_reset() {
