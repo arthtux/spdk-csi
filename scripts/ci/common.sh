@@ -46,6 +46,7 @@ function export_proxy() {
 
 function check_os() {
 	# check distro
+	# shellcheck disable=SC1091
 	source /etc/os-release
 	case $ID in
 	fedora)

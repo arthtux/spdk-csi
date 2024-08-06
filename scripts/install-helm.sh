@@ -11,11 +11,11 @@ SPDKCSI_CHART_NAME="spdk-csi"
 DEPLOY_TIMEOUT=300
 
 detectArch() {
-	case "$(uname -m)" in
+	case "$(arch)" in
 	"x86_64" | "amd64")
 		arch="amd64"
 		;;
-	"aarch64")
+	"aarch64" | "arm64")
 		arch="arm64"
 		;;
 	*)
@@ -28,12 +28,26 @@ detectArch() {
 }
 
 install() {
-	if [ "$hasHelm" = false ]; then
-		mkdir -p ${TEMP}
-		wget -q "https://get.helm.sh/helm-${HELM_VERSION}-${dist}-${arch}.tar.gz" -O "${TEMP}/helm.tar.gz"
-		tar -C "${TEMP}" -zxvf "${TEMP}/helm.tar.gz"
+	if ! command -v helm &> /dev/null; then
+		if [ "$(uname -s)" = "Darwin" ]; then
+			if ! command -v brew &> /dev/null; then
+				echo "Error: Homebrew is not installed. Please install Homebrew first."
+				exit 1
+			fi
+			brew install helm
+		else
+			mkdir -p ${TEMP}
+			wget -q "https://get.helm.sh/helm-${HELM_VERSION}-${dist}-${arch}.tar.gz" -O "${TEMP}/helm.tar.gz"
+			tar -C "${TEMP}" -zxvf "${TEMP}/helm.tar.gz"
+		fi
+		if ! command -v helm &> /dev/null; then
+			echo "Error: Helm installation failed"
+			exit 1
+		fi
+		echo "Helm install successful"
+	else
+		echo "Helm is all ready installed on the system"
 	fi
-	echo "Helm install successful"
 }
 
 install_spdkcsi_helm_charts() {
@@ -160,11 +174,10 @@ if ! helm_loc="$(type -p "helm")" || [[ -z ${helm_loc} ]]; then
 	# shellcheck disable=SC2021
 	dist=$(echo "${dist}" | tr "[A-Z]" "[a-z]")
 	HELM="${TEMP}/${dist}-${arch}/helm"
-	hasHelm=false
 fi
 
 case "${1:-}" in
-up)
+up | install)
 	install
 	;;
 clean)
@@ -178,7 +191,7 @@ cleanup-spdkcsi)
 	;;
 *)
 	echo "usage:" >&2
-	echo "  $0 up" >&2
+	echo "  $0 up|install" >&2
 	echo "  $0 clean" >&2
 	echo "  $0 install-spdkcsi" >&2
 	echo "  $0 cleanup-spdkcsi" >&2
