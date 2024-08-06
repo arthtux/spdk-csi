@@ -73,11 +73,14 @@ import (
 // an already deleted volume. The baseline is there should be no code crash or
 // data corruption under these conditions. Implementation may try to detect and
 // report errors if possible.
+
+//nolint:interfacebloat // The interface is designed to manage SPDK volumes and requires more methods.
 type SpdkNode interface {
 	Info() string
 	LvStores() ([]LvStore, error)
 	VolumeInfo(lvolID string) (map[string]string, error)
 	CreateVolume(lvolName, lvsName string, sizeMiB int64) (string, error)
+	SetQosOptions(lvolID string, readWriteIops, readWriteMbytes, readMbytes, writeMbytes int64) error
 	CloneVolume(lvolName, lvsName string, sourceLvolID string) (string, error)
 	GetVolume(lvolName, lvsName string) (string, error)
 	DeleteVolume(lvolID string) error
@@ -203,6 +206,29 @@ func (client *rpcClient) createVolume(lvolName, lvsName string, sizeMiB int64) (
 	}
 
 	return lvolID, err
+}
+
+func (client *rpcClient) SetQosOptions(lvolID string, readWriteIops, readWriteMbytes, readMbytes, writeMbytes int64) error {
+	params := struct {
+		LvolName        string `json:"name"`
+		ReadWriteIops   int64  `json:"rw_ios_per_sec"`
+		ReadWriteMbytes int64  `json:"rw_mbytes_per_sec"`
+		ReadMbytes      int64  `json:"r_mbytes_per_sec"`
+		WriteMbytes     int64  `json:"w_mbytes_per_sec"`
+	}{
+		LvolName:        lvolID,
+		ReadWriteIops:   readWriteIops,
+		ReadWriteMbytes: readWriteMbytes,
+		ReadMbytes:      readMbytes,
+		WriteMbytes:     writeMbytes,
+	}
+
+	err := client.call("bdev_set_qos_limit", &params, nil)
+	if errorMatches(err, ErrJSONNoSuchDevice) {
+		err = ErrJSONNoSuchDevice
+	}
+
+	return err
 }
 
 func (client *rpcClient) cloneVolume(lvolName, snapshotName string) (string, error) {

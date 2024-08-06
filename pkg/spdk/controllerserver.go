@@ -46,6 +46,13 @@ type spdkVolume struct {
 	nodeName string
 }
 
+const (
+	QosReadWriteIops   = "qosReadWriteIops"
+	QosReadWriteMbytes = "qosReadWriteMbytes"
+	QosReadMbytes      = "qosReadMbytes"
+	QosWriteMbytes     = "qosWriteMbytes"
+)
+
 func (cs *controllerServer) CreateVolume(_ context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	volumeID := req.GetName()
 	unlock := cs.volumeLocks.Lock(volumeID)
@@ -54,6 +61,12 @@ func (cs *controllerServer) CreateVolume(_ context.Context, req *csi.CreateVolum
 	csiVolume, err := cs.createVolume(req)
 	if err != nil {
 		klog.Errorf("failed to create volume, volumeID: %s err: %v", volumeID, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = cs.SetQosOptions(csiVolume.GetVolumeId(), req.GetParameters(), req.Secrets)
+	if err != nil {
+		klog.Errorf("failed to set QoS rate limit on volume, volumeID: %s err: %v", volumeID, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -73,6 +86,36 @@ func (cs *controllerServer) CreateVolume(_ context.Context, req *csi.CreateVolum
 	}
 
 	return &csi.CreateVolumeResponse{Volume: csiVolume}, nil
+}
+
+func (cs *controllerServer) SetQosOptions(volumeID string, volumeParams, secrets map[string]string) error {
+	readWriteIops, err := strconv.ParseInt(volumeParams["QosReadWriteIops"], 10, 64)
+	if err != nil {
+		readWriteIops = 0
+	}
+	readWriteMbytes, err := strconv.ParseInt(volumeParams["qosReadWriteMbytes"], 10, 64)
+	if err != nil {
+		readWriteMbytes = 0
+	}
+	readMbytes, err := strconv.ParseInt(volumeParams["qosReadMbytes"], 10, 64)
+	if err != nil {
+		readMbytes = 0
+	}
+	writeMbytes, err := strconv.ParseInt(volumeParams["qosWriteMbytes"], 10, 64)
+	if err != nil {
+		writeMbytes = 0
+	}
+
+	spdkVol, err := getSPDKVol(volumeID)
+	if err != nil {
+		return err
+	}
+	node, err := cs.getSpdkNode(spdkVol.nodeName, secrets)
+	if err != nil {
+		return err
+	}
+
+	return node.SetQosOptions(spdkVol.lvolID, readWriteIops, readWriteMbytes, readMbytes, writeMbytes)
 }
 
 func (cs *controllerServer) DeleteVolume(_ context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {

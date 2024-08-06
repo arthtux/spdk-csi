@@ -92,6 +92,15 @@ func (node *nodeISCSI) CreateVolume(lvolName, lvsName string, sizeMiB int64) (st
 	return lvolID, nil
 }
 
+func (node *nodeISCSI) SetQosOptions(lvolID string, readWriteIops, readWriteMbytes, readMbytes, writeMbytes int64) error {
+	err := node.client.SetQosOptions(lvolID, readWriteIops, readWriteMbytes, readMbytes, writeMbytes)
+	if err != nil {
+		return err
+	}
+	klog.V(5).Infof("QoS configured on volume: %s", lvolID)
+	return nil
+}
+
 // CloneVolume creates a logical volume based on the source volume and returns volume ID
 func (node *nodeISCSI) CloneVolume(lvolName, lvsName, sourceLvolID string) (string, error) {
 	// all volume have an alias ID named lvsName/lvolName
