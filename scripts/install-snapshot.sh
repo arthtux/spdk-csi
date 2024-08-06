@@ -59,8 +59,13 @@ function create_or_delete_resource() {
 	mkdir -p "${TEMP_DIR}"
 	curl -s -o "${temp_rbac}" "${SNAPSHOT_RBAC}"
 	curl -s -o "${temp_snap_controller}" "${SNAPSHOT_CONTROLLER}"
-	sed -i "s/namespace: default/namespace: ${namespace}/g" "${temp_rbac}"
-	sed -i "s/canary/${SNAPSHOT_VERSION}/g" "${temp_snap_controller}"
+	if [[ "$(uname)" == "Darwin" ]]; then
+		sed -i '' "s/namespace: default/namespace: ${namespace}/g" "${temp_rbac}"
+		sed -i '' "s/canary/${SNAPSHOT_VERSION}/g" "${temp_snap_controller}"
+	else
+		sed -i "s/namespace: default/namespace: ${namespace}/g" "${temp_rbac}"
+		sed -i "s/canary/${SNAPSHOT_VERSION}/g" "${temp_snap_controller}"
+	fi
 
 	kubectl "${operation}" -f "${temp_rbac}"
 	kubectl "${operation}" -f "${temp_snap_controller}" -n "${namespace}"
@@ -82,8 +87,8 @@ function kube_version() {
 	echo "${KUBE_VERSION}" | sed 's/^v//' | cut -d'.' -f"${1}"
 }
 
-if ! get_kube_version=$(kubectl version --short) ||
-   [[ -z "${get_kube_version}" ]]; then
+if ! get_kube_version=$(kubectl version --client=false) ||
+	[[ -z "${get_kube_version}" ]]; then
 	echo "could not get Kubernetes server version"
 	echo "hint: check if you have specified the right host or port"
 	exit 1

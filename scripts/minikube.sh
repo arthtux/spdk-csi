@@ -1,42 +1,94 @@
 #!/bin/bash -e
 
-KUBE_VERSION=${KUBE_VERSION:-v1.25.0}
-MINIKUBE_VERSION=${MINIKUBE_VERSION:-v1.27.0}
-MINIKUBE_DRIVER=${MINIKUBE_DRIVER:-none}
-MINIKUBE_ARCH=amd64
-if [ "$(uname -m)" = "aarch64" ]; then
-	MINIKUBE_ARCH=arm64
-fi
+KUBE_VERSION=${KUBE_VERSION:-v1.30.0}
+MINIKUBE_VERSION=${MINIKUBE_VERSION:-v1.33.1}
+MINIKUBE_DRIVER=${MINIKUBE_DRIVER:-docker}
+
+detectArch() {
+	case "$(arch)" in
+	"x86_64" | "amd64")
+		MINIKUBE_ARCH="amd64"
+		;;
+	"aarch64" | "arm64")
+		MINIKUBE_ARCH="arm64"
+		;;
+	*)
+		echo "Couldn't translate 'uname -m' output to an available arch."
+		echo "Try setting ARCH environment variable to your system arch:"
+		echo "amd64, x86_64, aarch64"
+		exit 1
+		;;
+	esac
+}
 
 function install_minikube() {
-	if hash minikube 2> /dev/null; then
-		version=$(minikube version | awk '{print $3; exit;}')
-		if [[ "${version}" != "${MINIKUBE_VERSION}" ]]; then
-			echo "installed minikube doesn't match requested version ${MINIKUBE_VERSION}"
-			echo "please remove minikube ${version} first"
+	if ! command -v minikube &> /dev/null; then
+		if [ -z "${arch}" ]; then
+			detectArch
+		fi
+		echo "=== installing minikube-${MINIKUBE_VERSION} ==="
+		if [[ "$(uname)" == "Darwin" ]]; then
+			echo "=== downloading minikube-${MINIKUBE_VERSION} for Darwin"
+			curl -sLo /tmp/minikube-darwin-"${MINIKUBE_ARCH}"-"${MINIKUBE_VERSION}" https://storage.googleapis.com/minikube/releases/"${MINIKUBE_VERSION}"/minikube-darwin-"${MINIKUBE_ARCH}"
+			sudo install /tmp/minikube-darwin-"${MINIKUBE_ARCH}"-"${MINIKUBE_VERSION}" /usr/local/bin/minikube
+			rm -rf minikube-darwin-arm64
+			echo "Minikube install successful restart your terminal or reload your environment for see the minikube command"
+		elif [[ "$(uname)" == "Linux" ]]; then
+			echo "=== Downloading minikube-${MINIKUBE_VERSION} for Linux"
+			curl -sLo /usr/local/bin/minikube https://storage.googleapis.com/minikube/releases/"${MINIKUBE_VERSION}"/minikube-linux-"${MINIKUBE_ARCH}" && chmod +x /usr/local/bin/minikube
+			echo "Minikube install successful"
+		else
+			echo "Unsupported operating system"
 			exit 1
 		fi
-		echo "minikube-${version} already installed"
-		return
+		echo "Minikube is installed with the version ${MINIKUBE_VERSION}"
+	elif [[ "$(minikube version | awk '{print $3; exit;}')" != "${MINIKUBE_VERSION}" ]]; then
+		echo "Minikube version is not ${MINIKUBE_VERSION}"
+		echo "please remove minikube first"
+		exit 1
+	else
+		echo "Minikube is all ready installed on the system"
 	fi
+}
 
-	echo "=== downloading minikube-${MINIKUBE_VERSION}"
-	curl -sLo /usr/local/bin/minikube https://storage.googleapis.com/minikube/releases/"${MINIKUBE_VERSION}"/minikube-linux-"${MINIKUBE_ARCH}" && chmod +x /usr/local/bin/minikube
+check_minikube() {
+	if ! command -v minikube &> /dev/null; then
+		echo "minikube is not installed run befort ${0} install"
+		exit 1
+	fi
 }
 
 case "$1" in
-	up)
+	install)
 		install_minikube
-		echo "=== starting minikube with kubeadm bootstrapper"
+		;;
+	start)
+		echo "=== starting minikube ==="
+		check_minikube
 		CHANGE_MINIKUBE_NONE_USER=true minikube start -b kubeadm --kubernetes-version="${KUBE_VERSION}" --vm-driver="${MINIKUBE_DRIVER}"
 		;;
-	down)
+	status)
+		echo "=== minikube status ==="
+		check_minikube
+		minikube status
+		;;
+	stop)
+		echo "=== stopping minikube ==="
+		check_minikube
 		minikube stop
 		;;
-	clean)
+	delete)
+		echo "=== deleting minikube ==="
+		check_minikube
 		minikube delete
 		;;
+	uninstall)
+		echo "=== uninstalling minikube ==="
+		check_minikube
+		minikube delete
+		sudo rm -rf /usr/local/bin/minikube
+		;;
 	*)
-		echo "$0 [up|down|clean]"
+		echo "$0 [install|start|status|stop|delete|uninstall]"
 		;;
 esac
